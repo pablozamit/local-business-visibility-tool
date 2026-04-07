@@ -1,0 +1,137 @@
+openapi: 3.0.3
+info:
+  title: VisibilidadAIO APIs
+  description: |
+    Dos herramientas para tu Agente de IA.
+    - /api/prospect: Encuentra leads vulnerables en un barrio concreto (ANTES de contactarles).
+    - /api/analyze: Genera el informe completo de visibilidad (SOLO si responden al cold email).
+  version: 1.1.0
+servers:
+  - url: https://v0-local-business-visibility-tool.vercel.app
+paths:
+  /api/prospect:
+    post:
+      summary: Encontrar leads vulnerables en un barrio
+      description: |
+        Busca en Google Maps dentro de las coordenadas exactas de un barrio de tu base de datos. 
+        Salta el Top 3 (los ganadores) y devuelve negocios del puesto 4 al 20 que tienen web 
+        pero muestran errores basicos en su ficha de Maps (nombre no optimizado, pocas reseñas).
+        Usa esto para construir la lista de prospectos ANTES de enviar cualquier email.
+      operationId: prospectLocalLeads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [neighborhoodId, category]
+              properties:
+                neighborhoodId:
+                  type: string
+                  description: "ID del barrio de la base de datos (ej: 'mad-salamanca', 'bcn-eixample-dret'). Si no sabes el ID exacto, llama al endpoint sin body para recibir la lista completa de IDs disponibles."
+                category:
+                  type: string
+                  description: "Sector a buscar en ese barrio (ej: 'dentista', 'abogado laboralista', 'clinica estetica')"
+      responses:
+        '200':
+          description: Lista de prospectos cualificados del barrio.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  neighborhood:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      city: { type: string }
+                  topCompetitors:
+                    type: array
+                    description: "Los 3 negocios que dominan ese barrio (para usarlos en el cold email como referencia de dolor)"
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        rating: { type: number }
+                        reviews: { type: integer }
+                  totalProspects:
+                    type: integer
+                  prospects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        address: { type: string }
+                        phone: { type: string }
+                        website: { type: string }
+                        rating: { type: number }
+                        reviewCount: { type: integer }
+                        redFlags:
+                          type: array
+                          description: "Problemas detectados automaticamente en su ficha de Maps"
+                          items: { type: string }
+
+  /api/analyze:
+    post:
+      summary: Generar informe completo de visibilidad SEO
+      description: |
+        SOLO usar cuando el lead ha respondido al cold email y ha aceptado recibir la auditoría.
+        Ejecuta 6 búsquedas reales en Google para el negocio y devuelve scores, diagnóstico 
+        interno y recomendaciones personalizadas.
+      operationId: generateVisibilityReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, location, category]
+              properties:
+                name: { type: string, description: "Nombre exacto del negocio" }
+                location: { type: string, description: "Ciudad" }
+                category: { type: string, description: "Sector" }
+      responses:
+        '200':
+          description: Informe completo de visibilidad.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scores:
+                    type: object
+                    properties:
+                      beforeScore: { type: integer }
+                      afterScore: { type: integer }
+                      visibilityLoss: { type: integer }
+                      mapPackScore: { type: integer }
+                      aiOverviewScore: { type: integer }
+                  internalReport:
+                    type: object
+                    properties:
+                      insights:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            type: { type: string }
+                            metric: { type: string }
+                            message: { type: string }
+                      topCompetitors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name: { type: string }
+                            count: { type: integer }
+                  recommendations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title: { type: string }
+                        description: { type: string }
+                        impact: { type: string }
+                        category: { type: string }
