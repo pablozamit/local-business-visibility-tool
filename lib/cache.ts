@@ -35,19 +35,22 @@ export async function getCache<T>(key: string): Promise<T | null> {
   return null
 }
 
-export async function setCache(key: string, data: any, ttlSeconds: number = 14 * 24 * 60 * 60): Promise<void> {
+export async function setCache(key: string, data: any, ttlSeconds?: number): Promise<void> {
   if (redis) {
+    const finalTtl = ttlSeconds ?? 14 * 24 * 60 * 60 // 14 días por defecto para Redis
     try {
-      await redis.set(key, data, { ex: ttlSeconds })
+      await redis.set(key, data, { ex: finalTtl })
       return
     } catch (error) {
       console.error("Redis set error:", error)
     }
   }
 
+  // Fallback a memoria: 60 minutos por defecto si no se especifica
+  const finalTtl = ttlSeconds ?? 60 * 60
   inMemoryCache.set(key, {
     data,
-    expiry: Date.now() + ttlSeconds * 1000,
+    expiry: Date.now() + finalTtl * 1000,
   })
 }
 
