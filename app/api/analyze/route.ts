@@ -4,23 +4,23 @@ import { generateReport } from "@/lib/actions"
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { name, location, category } = body
+    const { name, location, category, gbpUrl, placeId } = body
 
     if (!name || !location || !category) {
       return NextResponse.json(
-        { error: "Missing required fields: name, location, category" },
+        { error: "Faltan campos obligatorios: nombre, ubicación, categoría" },
         { status: 400 }
       )
     }
 
-    const business = { name, location, category }
+    const business = { name, location, category, gbpUrl, placeId }
     const report = await generateReport(business)
 
     return NextResponse.json(report)
   } catch (error: any) {
     console.error("API Error:", error)
     return NextResponse.json(
-      { error: "Failed to generate visibility report", details: error.message },
+      { error: "Error al generar el informe de visibilidad", details: error.message },
       { status: 500 }
     )
   }

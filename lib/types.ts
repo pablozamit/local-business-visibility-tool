@@ -2,6 +2,8 @@ export interface BusinessInput {
   name: string
   location: string
   category: string
+  gbpUrl?: string
+  placeId?: string
 }
 
 export interface QueryResult {
@@ -16,6 +18,7 @@ export interface QueryResult {
     present: boolean
     mentioned: boolean
     mentionType: "direct" | "citation" | null
+    text?: string // New: to store the AI Overview text
   }
   organicPosition: number | null
 }
@@ -41,6 +44,61 @@ export interface Recommendation {
   category: string
 }
 
+export interface Review {
+  authorName: string;
+  rating: number;
+  text: string;
+  time: string;                 // relativo o timestamp
+  sentiment?: 'positive' | 'neutral' | 'negative';
+}
+
+export interface MissingItem {
+  label: string;
+  impact: 'high' | 'medium' | 'low';
+}
+
+export interface GBPData {
+  placeId: string;
+  businessName: string;
+  rating: number;
+  userRatingsTotal: number;
+  photosCount: number;
+  postsCount: number;           // si disponible
+  attributesCompleted: number;
+  attributesTotal: number;
+  lastUpdated: string;
+  reviews: Review[];
+  completenessScore: number;    // 0-100 calculado
+  missingItems: MissingItem[];
+  website?: string;
+  phoneNumber?: string;
+  address?: string;
+  hours?: string[];
+  isOpenNow?: boolean;
+}
+
+export interface Competitor {
+  name: string;
+  placeId?: string;
+  visibilityScore: number;
+  mapPackWins: number;
+  reviewsCount: number;
+  rating: number;
+  photosCount: number;
+  aiMentions: number;
+}
+
+export interface SmartRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  effort: 'low' | 'medium' | 'high';
+  impact: number;               // 1-100 estimado
+  category: string;
+  quickWin: boolean;
+  estimatedPointsGain: number;
+}
+
 export interface AnalysisReport {
   business: BusinessInput
   timestamp: string
@@ -51,9 +109,13 @@ export interface AnalysisReport {
     beforeScore: number
     afterScore: number
     visibilityLoss: number
+    gbpCompletenessScore?: number
   }
   internalReport: InternalReport
-  recommendations: Recommendation[]
+  recommendations: Recommendation[] // Mantener por compatibilidad inicial
+  smartRecommendations?: SmartRecommendation[]
+  gbpData?: GBPData
+  competitors?: Competitor[]
 }
 
 // Alias per compatibilità con alcuni componenti
