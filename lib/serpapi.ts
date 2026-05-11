@@ -1,7 +1,7 @@
 import type { BusinessInput, QueryResult } from "./types"
 
 export const QUERY_TEMPLATES = [
-  { type: "brand", template: (cat: string, loc: string) => `${cat} ${loc}` },
+  { type: "directa", template: (cat: string, loc: string) => `${cat} ${loc}` },
   { type: "intent", template: (cat: string, loc: string) => `mejor ${cat} en ${loc}` },
   { type: "near_me", template: (cat: string, loc: string) => `${cat} cerca de mí` },
   { type: "service_specific", template: (cat: string, loc: string) => `servicios de ${cat} en ${loc}` },
@@ -83,6 +83,34 @@ export async function runSerpQuery({
       aiMentioned = brandTerms.some(term => aiContent.includes(term));
     }
 
+    // 5. EXTRACT BUSINESS DATA (Free Mode Support)
+    let extractedBusinessData = null;
+    if (kg && kg.title && brandTerms.some(term => kg.title.toLowerCase().includes(term))) {
+      extractedBusinessData = {
+        source: "knowledge_graph",
+        title: kg.title,
+        type: kg.type,
+        rating: kg.rating,
+        reviews: kg.reviews,
+        reviews_results: kg.reviews_results,
+        photos: kg.photos,
+        website: kg.website,
+        phone: kg.phone,
+        address: kg.address,
+        hours: kg.hours,
+      };
+    } else {
+      const matchingLocal = localResults.find((res: any) =>
+        brandTerms.some(term => (res.title || "").toLowerCase().includes(term))
+      );
+      if (matchingLocal) {
+        extractedBusinessData = {
+          source: "local_results",
+          ...matchingLocal
+        };
+      }
+    }
+
     return {
       query: queryText,
       queryType,
@@ -101,6 +129,7 @@ export async function runSerpQuery({
         text: aiText
       },
       organicPosition,
+      extractedBusinessData
     }
   } catch (e) {
     console.error("Error en SerpAPI:", e);

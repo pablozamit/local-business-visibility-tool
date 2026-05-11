@@ -2,7 +2,7 @@
 
 import { runSerpQuery, QUERY_TEMPLATES } from "./serpapi"
 import { calculateScores, generateInternalReport, generateRecommendations } from "./report"
-import { fetchGBPData } from "./gbp"
+import { fetchGBPData, extractGBPDataFromSerp } from "./gbp"
 import { analyzeCompetitors } from "./competitors"
 import { generateSmartRecommendations } from "./recommendations"
 import { getCache, setCache, generateCacheKey } from "./cache"
@@ -40,17 +40,30 @@ export async function generateReport(business: BusinessInput): Promise<AnalysisR
     })
   )
 
-  // 2. Obtener datos reales de GBP (Nuevo)
-  const gbpData = await fetchGBPData(business);
+  // 2. Obtener datos reales de GBP
+  const hasPlacesKey = !!process.env.GOOGLE_PLACES_API_KEY
+  let gbpData = null
 
-  // 3. Analizar competidores (Nuevo)
+  if (hasPlacesKey) {
+    gbpData = await fetchGBPData(business)
+  }
+
+  const isFreeMode = !gbpData
+
+  if (isFreeMode) {
+    console.log("ℹ️ Usando modo gratuito para datos de GBP...");
+    gbpData = extractGBPDataFromSerp(queries);
+  }
+
+  // 3. Analizar competidores
   const competitors = await analyzeCompetitors(queries, business);
 
   // 4. Calcular scores
   const baseScores = calculateScores(queries);
   const scores = {
     ...baseScores,
-    gbpCompletenessScore: gbpData?.completenessScore || 0
+    gbpCompletenessScore: gbpData?.completenessScore || 0,
+    isFreeMode
   };
 
   // 5. Generar informes y recomendaciones

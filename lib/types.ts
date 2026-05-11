@@ -21,6 +21,7 @@ export interface QueryResult {
     text?: string // New: to store the AI Overview text
   }
   organicPosition: number | null
+  extractedBusinessData?: any
 }
 
 export interface InternalInsight {
@@ -110,6 +111,7 @@ export interface AnalysisReport {
     afterScore: number
     visibilityLoss: number
     gbpCompletenessScore?: number
+    isFreeMode?: boolean
   }
   internalReport: InternalReport
   recommendations: Recommendation[] // Mantener por compatibilidad inicial

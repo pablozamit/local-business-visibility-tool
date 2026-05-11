@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Brain, TrendingDown, LayoutDashboard, Search, Star, MessageSquare, Zap } from "lucide-react"
+import { MapPin, Brain, TrendingDown, LayoutDashboard, Search, Star, MessageSquare, Zap, AlertCircle } from "lucide-react"
 import type { AnalysisReport } from "@/lib/types"
 import { GBPCompletenessCard } from "./gbp-completeness-card"
 import { CompetitorTable } from "./competitor-table"
@@ -16,6 +16,20 @@ export function ResultsDashboard({ report }: { report: AnalysisReport }) {
 
   return (
     <div className="space-y-8">
+      {/* Banner Modo Gratuito */}
+      {scores.isFreeMode && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+          <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" />
+          <div className="text-sm text-yellow-800">
+            <p className="font-bold mb-1">Modo gratuito activo</p>
+            <p>
+              Algunas secciones (fotos, reseñas completas, benchmark avanzado) están limitadas por no disponer de claves de pago.
+              <span className="font-medium"> Añade tu clave de Google Places para desbloquear todas las funciones.</span>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Resumen Ejecutivo */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 text-white border-none shadow-xl">
