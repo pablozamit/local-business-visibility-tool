@@ -1,46 +1,79 @@
 "use server"
 
-import { runSerpQuery } from "./serpapi"
-import { calculateScores, generateRecommendations, generateInternalReport, QUERY_TEMPLATES } from "./report"
+import { runSerpQuery, QUERY_TEMPLATES } from "./serpapi"
+import { calculateScores, generateInternalReport, generateRecommendations } from "./report"
+import { fetchGBPData } from "./gbp"
+import { analyzeCompetitors } from "./competitors"
+import { generateSmartRecommendations } from "./recommendations"
+import { getCache, setCache, generateCacheKey } from "./cache"
 import type { BusinessInput, AnalysisReport } from "./types"
 
 export async function generateReport(business: BusinessInput): Promise<AnalysisReport> {
-  // ORA LA CHIAVE VIENE LETTA DAL FILE .ENV (PRO!)
   const apiKey = process.env.SERPAPI_KEY
 
   if (!apiKey) {
-    throw new Error("ERRORE: La chiave SERPAPI_KEY non è configurata nel file .env")
+    throw new Error("ERROR: La clave SERPAPI_KEY no está configurada en el archivo .env")
   }
 
-  console.log(`🚀 Avvio analisi reale per: ${business.name} a ${business.location}...`)
+  // 0. Caching Check
+  const cacheKey = generateCacheKey(business.name, business.location, business.category)
+  const cachedReport = await getCache<AnalysisReport>(cacheKey)
+  if (cachedReport) {
+    console.log(`📦 Devolviendo reporte desde caché para: ${business.name}`)
+    return cachedReport
+  }
 
-  // Eseguiamo le 6 ricerche reali su Google via SerpApi usando i tuoi template originali
+  console.log(`🚀 Iniciando análisis real para: ${business.name} en ${business.location}...`)
+
+  // 1. Eseguiamo le 6 ricerche reali su Google via SerpApi
   const queries = await Promise.all(
     QUERY_TEMPLATES.map(async (template) => {
       const queryText = template.template(business.category, business.location)
-      console.log(`🔎 Ricerca Google: "${queryText}"`)
+      console.log(`🔎 Búsqueda Google: "${queryText}"`)
 
       return runSerpQuery({
         business,
         queryType: template.type,
         queryText,
-        apiKey, // Qui passa la chiave sicura
+        apiKey,
       })
     })
   )
 
-  const scores = calculateScores(queries)
+  // 2. Obtener datos reales de GBP (Nuevo)
+  const gbpData = await fetchGBPData(business);
+
+  // 3. Analizar competidores (Nuevo)
+  const competitors = await analyzeCompetitors(queries, business);
+
+  // 4. Calcular scores
+  const baseScores = calculateScores(queries);
+  const scores = {
+    ...baseScores,
+    gbpCompletenessScore: gbpData?.completenessScore || 0
+  };
+
+  // 5. Generar informes y recomendaciones
   const internalReport = generateInternalReport(queries, business.name)
-  const recommendations = generateRecommendations(scores, queries, internalReport)
+  const recommendations = generateRecommendations(baseScores, queries, internalReport) // Compatibilidad
+  const smartRecommendations = generateSmartRecommendations(gbpData, competitors, queries)
 
-  console.log(`✅ Analisi completata per ${business.name}`)
+  console.log(`✅ Análisis completado para ${business.name}`)
 
-  return {
+  const report: AnalysisReport = {
     business,
     timestamp: new Date().toISOString(),
     queries,
     scores,
     internalReport,
     recommendations,
+    smartRecommendations,
+    gbpData: gbpData || undefined,
+    competitors,
   }
+
+  // 6. Save to cache
+  await setCache(cacheKey, report)
+
+  return report
 }
