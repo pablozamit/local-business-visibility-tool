@@ -2,9 +2,11 @@ import { GBPData, Review, MissingItem, BusinessInput } from "./types";
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
+import { logger } from "./logger";
+
 export async function fetchGBPData(business: BusinessInput): Promise<GBPData | null> {
   if (!GOOGLE_PLACES_API_KEY) {
-    console.warn("GOOGLE_PLACES_API_KEY no configurada");
+    logger.warn("GOOGLE_PLACES_API_KEY no configurada");
     return null;
   }
 
@@ -57,8 +59,8 @@ export async function fetchGBPData(business: BusinessInput): Promise<GBPData | n
 
     const data = await response.json();
     return transformPlacesData(data);
-  } catch (error) {
-    console.error("Error al obtener datos de GBP:", error);
+  } catch (error: any) {
+    logger.error({ err: error.message }, "Error al obtener datos de GBP");
     return null;
   }
 }
@@ -94,8 +96,8 @@ async function searchPlaceId(name: string, location: string): Promise<string | u
 
     const data = await response.json();
     return data.places?.[0]?.id;
-  } catch (error) {
-    console.error("Error en searchPlaceId:", error);
+  } catch (error: any) {
+    logger.error({ err: error.message }, "Error en searchPlaceId");
     return undefined;
   }
 }
@@ -154,84 +156,6 @@ function transformPlacesData(data: any): GBPData {
     address: data.formattedAddress,
     hours: data.regularOpeningHours?.weekdayDescriptions,
     isOpenNow: data.currentOpeningHours?.openNow,
-  };
-}
-
-export function extractGBPDataFromSerp(queries: any[]): GBPData | null {
-  // Buscar el primer resultado que tenga extractedBusinessData, priorizando el tipo "directa"
-  const directQuery = queries.find(q => q.queryType === "directa" && q.extractedBusinessData);
-  const bestData = directQuery?.extractedBusinessData || queries.find(q => q.extractedBusinessData)?.extractedBusinessData;
-
-  if (!bestData) return null;
-
-  const reviews: Review[] = [];
-
-  // Intentar extraer reseñas de knowledge_graph
-  if (bestData.reviews_results) {
-    bestData.reviews_results.slice(0, 5).forEach((r: any) => {
-      reviews.push({
-        authorName: r.author || "Anónimo",
-        rating: r.rating || 0,
-        text: r.snippet || "",
-        time: r.date || "",
-        sentiment: analyzeSentiment(r.snippet || ""),
-      });
-    });
-  } else if (bestData.reviews) {
-    // A veces solo viene el texto de la reseña en local_results
-    // Si SerpAPI no da el desglose, al menos sabemos el rating
-  }
-
-  const missingItems: MissingItem[] = [];
-  let completedPoints = 0;
-  const totalPoints = 7;
-
-  // Rating & Reviews
-  if (bestData.rating) completedPoints++;
-  else missingItems.push({ label: "Sin calificación visible", impact: "high" });
-
-  if (bestData.reviews || bestData.userRatingCount) completedPoints++;
-  else missingItems.push({ label: "Sin reseñas detectadas", impact: "high" });
-
-  // Photos (SerpAPI suele dar un link a fotos o un thumbnail)
-  if (bestData.photos || bestData.thumbnail) completedPoints++;
-  else missingItems.push({ label: "Sin fotos en el perfil", impact: "high" });
-
-  // Hours
-  if (bestData.hours) completedPoints++;
-  else missingItems.push({ label: "Horarios no detectados", impact: "medium" });
-
-  // Website
-  if (bestData.website || bestData.links?.website) completedPoints++;
-  else missingItems.push({ label: "Web no detectada", impact: "medium" });
-
-  // Phone
-  if (bestData.phone) completedPoints++;
-  else missingItems.push({ label: "Teléfono no detectado", impact: "high" });
-
-  // Address
-  if (bestData.address) completedPoints++;
-  else missingItems.push({ label: "Dirección no detectada", impact: "medium" });
-
-  const completenessScore = Math.round((completedPoints / totalPoints) * 100);
-
-  return {
-    placeId: bestData.place_id || "extracted",
-    businessName: bestData.title || "",
-    rating: bestData.rating || 0,
-    userRatingsTotal: bestData.reviews || bestData.userRatingCount || 0,
-    photosCount: bestData.photos?.length || (bestData.thumbnail ? 1 : 0),
-    postsCount: 0,
-    attributesCompleted: completedPoints,
-    attributesTotal: totalPoints,
-    lastUpdated: new Date().toISOString(),
-    reviews,
-    completenessScore,
-    missingItems,
-    website: bestData.website || bestData.links?.website,
-    phoneNumber: bestData.phone,
-    address: bestData.address,
-    hours: bestData.hours ? [bestData.hours] : undefined,
   };
 }
 

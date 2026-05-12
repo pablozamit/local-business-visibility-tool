@@ -1,30 +1,27 @@
-# v0 Local Business Visibility Tool - v2
+# v0 Local Business Visibility Tool - v3-complete
 
-Herramienta profesional de auditoría de visibilidad local que integra datos reales de Google Business Profile y SerpAPI para analizar el impacto de la IA y el posicionamiento local.
+Herramienta profesional de nivel agencia para auditoría de visibilidad local que integra datos oficiales de Google Business Profile y SerpAPI para analizar el impacto de la IA y el posicionamiento local.
 
-## Características de la v2
+## Características de la v3
 
-- **Datos Reales:** Integración con Google Places API (New) y SerpAPI.
-- **Auditoría de GBP:** Análisis de completitud de la ficha (fotos, reseñas, horarios, etc.).
-- **Impacto de IA:** Seguimiento de menciones en AI Overviews (SGE) de Google.
-- **Benchmark de Competencia:** Comparativa con los 5 competidores principales en el Map Pack.
+- **Modo Único Completo:** Funcionamiento exclusivo con datos oficiales para máxima precisión.
+- **Datos Reales:** Integración obligatoria con Google Places API (New) y SerpAPI.
+- **Reporte Rediseñado:** Informe PDF profesional con 8 secciones estratégicas.
+- **Logging Profesional:** Sistema de logs exhaustivo con Pino para monitoreo en producción.
+- **Auditoría de GBP:** Análisis profundo de completitud de la ficha (fotos, reseñas, horarios, etc.).
+- **Impacto de IA:** Seguimiento detallado de menciones en AI Overviews (SGE) de Google.
+- **Benchmark de Competencia:** Comparativa avanzada con competidores principales.
 - **Plan de Acción:** Recomendaciones inteligentes priorizadas por impacto y esfuerzo.
-- **Caché Robusta:** Integración con Upstash Redis para optimizar costes de API, con fallback automático en memoria.
-- **Modo Gratuito:** Funciona solo con SerpAPI si no se configuran otras claves, extrayendo datos del Knowledge Graph.
+- **Caché Robusta:** Integración con Upstash Redis para optimizar costes de API.
 
 ## Configuración
 
-Copia el archivo `.env.example` a `.env.local`. La herramienta es flexible y puede funcionar con diferentes niveles de configuración:
+Copia el archivo `.env.example` a `.env.local`. Esta herramienta requiere configuración completa para funcionar:
 
-### 1. Modo Gratuito (Mínimo requerido)
-Solo necesitas SerpAPI. Los datos del perfil de negocio se extraerán directamente de los resultados de búsqueda.
+### Requisitos Obligatorios
+La herramienta funciona exclusivamente en modo completo con ambas claves:
 ```env
 SERPAPI_KEY=tu_clave_de_serpapi
-```
-
-### 2. Modo Completo (Recomendado)
-Añade Google Places para obtener datos exactos y auditoría profunda de reseñas y fotos.
-```env
 GOOGLE_PLACES_API_KEY=tu_clave_de_google_places
 ```
 

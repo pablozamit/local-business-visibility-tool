@@ -118,13 +118,20 @@ export interface AnalysisReport {
     afterScore: number
     visibilityLoss: number
     gbpCompletenessScore?: number
-    isFreeMode?: boolean
+    dataQuality: 'official'
+    hasActiveGBP: boolean
+    visibilityStatus: 'visible' | 'low' | 'invisible'
   }
   internalReport: InternalReport
   recommendations: Recommendation[] // Mantener por compatibilidad inicial
   smartRecommendations?: SmartRecommendation[]
   gbpData?: GBPData
   competitors?: Competitor[]
+  metadata: {
+    version: string
+    mode: string
+    generatedWith: string
+  }
 }
 
 // Alias per compatibilità con alcuni componenti
