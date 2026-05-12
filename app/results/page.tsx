@@ -7,15 +7,28 @@ import Link from "next/link"
 export const dynamic = "force-dynamic"
 
 export default async function Page(props: {
-  searchParams: Promise<{ name?: string; location?: string; category?: string; gbpUrl?: string; placeId?: string }>
+  searchParams: Promise<{ 
+    name?: string; 
+    location?: string; 
+    category?: string; 
+    gbpUrl?: string; 
+    placeId?: string;
+    countryCode?: string;
+    languageCode?: string;
+  }>
 }) {
   const searchParams = await props.searchParams;
 
+  // Extraemos los campos básicos
   const name = searchParams.name || ""
   const location = searchParams.location || ""
   const category = searchParams.category || ""
   const gbpUrl = searchParams.gbpUrl || ""
   const placeId = searchParams.placeId || ""
+  
+  // NUEVO: Recogemos el país e idioma de la URL (o valores por defecto)
+  const countryCode = searchParams.countryCode || "es"
+  const languageCode = searchParams.languageCode || "es"
 
   if (!name || !location || !category) {
     return (
@@ -32,7 +45,16 @@ export default async function Page(props: {
     )
   }
 
-  const business = { name, location, category, gbpUrl, placeId }
+  // Creamos el objeto de negocio incluyendo la localización internacional
+  const business = { 
+    name, 
+    location, 
+    category, 
+    gbpUrl, 
+    placeId, 
+    countryCode, 
+    languageCode 
+  }
 
   try {
     const report = await generateReport(business)
@@ -49,7 +71,7 @@ export default async function Page(props: {
                 Reporte de Visibilidad Profesional
               </h1>
               <p className="text-lg text-slate-600 font-medium">
-                Analizando: <span className="text-blue-600">{business.name}</span> • {business.location}
+                Analizando: <span className="text-blue-600">{business.name}</span> • {business.location} ({business.countryCode.toUpperCase()})
               </p>
             </div>
             <div className="flex items-center gap-2">
