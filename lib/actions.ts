@@ -1,6 +1,6 @@
 "use server"
 
-import { runSerpQuery, QUERY_TEMPLATES } from "./serpapi"
+import { runSerpQuery, getQueryTemplates } from "./serpapi" // Importamos la nueva función
 import { calculateScores, generateInternalReport, generateRecommendations } from "./report"
 import { fetchGBPData, extractGBPDataFromSerp } from "./gbp"
 import { analyzeCompetitors } from "./competitors"
@@ -12,25 +12,23 @@ export async function generateReport(business: BusinessInput): Promise<AnalysisR
   const apiKey = process.env.SERPAPI_KEY
 
   if (!apiKey) {
-    throw new Error("ERROR: La clave SERPAPI_KEY no está configurada en el archivo .env")
+    throw new Error("ERROR: La clave SERPAPI_KEY no está configurada")
   }
 
-  // 0. Caching Check
   const cacheKey = generateCacheKey(business.name, business.location, business.category)
   const cachedReport = await getCache<AnalysisReport>(cacheKey)
-  if (cachedReport) {
-    console.log(`📦 Devolviendo reporte desde caché para: ${business.name}`)
-    return cachedReport
-  }
+  if (cachedReport) return cachedReport
 
-  console.log(`🚀 Iniciando análisis real para: ${business.name} en ${business.location}...`)
+  console.log(`🚀 Analizando: ${business.name} en ${business.location} (${business.countryCode})...`)
 
-  // 1. Eseguiamo le 6 ricerche reali su Google via SerpApi
+  // OBTENEMOS LOS TEMPLATES SEGÚN EL IDIOMA SELECCIONADO
+  const templates = getQueryTemplates(business.languageCode || "es")
+
+  // 1. Ejecutamos las 6 búsquedas usando los templates localizados
   const queries = await Promise.all(
-    QUERY_TEMPLATES.map(async (template) => {
+    templates.map(async (template) => {
       const queryText = template.template(business.category, business.location)
-      console.log(`🔎 Búsqueda Google: "${queryText}"`)
-
+      
       return runSerpQuery({
         business,
         queryType: template.type,
@@ -40,7 +38,7 @@ export async function generateReport(business: BusinessInput): Promise<AnalysisR
     })
   )
 
-  // 2. Obtener datos reales de GBP
+  // 2. Datos de GBP (Oficial vs Scraping)
   const hasPlacesKey = !!process.env.GOOGLE_PLACES_API_KEY
   let gbpData = null
 
@@ -51,27 +49,21 @@ export async function generateReport(business: BusinessInput): Promise<AnalysisR
   const isFreeMode = !gbpData
 
   if (isFreeMode) {
-    console.log("ℹ️ Usando modo gratuito para datos de GBP...");
-    gbpData = extractGBPDataFromSerp(queries);
+    gbpData = extractGBPDataFromSerp(queries)
   }
 
-  // 3. Analizar competidores
-  const competitors = await analyzeCompetitors(queries, business);
-
-  // 4. Calcular scores
-  const baseScores = calculateScores(queries);
+  // 3. Análisis y Scores
+  const competitors = await analyzeCompetitors(queries, business)
+  const baseScores = calculateScores(queries)
   const scores = {
     ...baseScores,
     gbpCompletenessScore: gbpData?.completenessScore || 0,
     isFreeMode
-  };
+  }
 
-  // 5. Generar informes y recomendaciones
   const internalReport = generateInternalReport(queries, business.name)
-  const recommendations = generateRecommendations(baseScores, queries, internalReport) // Compatibilidad
+  const recommendations = generateRecommendations(baseScores, queries, internalReport)
   const smartRecommendations = generateSmartRecommendations(gbpData, competitors, queries)
-
-  console.log(`✅ Análisis completado para ${business.name}`)
 
   const report: AnalysisReport = {
     business,
@@ -85,8 +77,6 @@ export async function generateReport(business: BusinessInput): Promise<AnalysisR
     competitors,
   }
 
-  // 6. Save to cache
   await setCache(cacheKey, report)
-
   return report
 }
