@@ -21,13 +21,16 @@ export async function runSerpQuery({
   apiKey: string
 }): Promise<QueryResult> {
 
+  // Mapeo dinámico del dominio de Google según el país
+  const googleDomain = business.countryCode === 'it' ? "google.it" : "google.es";
+
   const params = new URLSearchParams({
     api_key: apiKey,
     engine: "google",
     q: queryText,
-    google_domain: "google.es",
-    gl: "es",
-    hl: "es",
+    google_domain: googleDomain,
+    gl: business.countryCode || "es", // País de búsqueda (ej: "it")
+    hl: business.languageCode || "es", // Idioma de la interfaz (ej: "it")
     num: "20"
   })
 
@@ -39,24 +42,24 @@ export async function runSerpQuery({
     const organicResults = data.organic_results || []
     const kg = data.knowledge_graph || {}
 
-    // Normalización para matching
+    // Normalización para matching: eliminamos palabras genéricas para evitar falsos positivos
     const brandTerms = business.name.toLowerCase()
       .split(/\s+/)
-      .filter(term => term.length > 2 && !["clinica", "dental", "madrid", "restaurante", "pizzeria"].includes(term));
+      .filter(term => term.length > 2 && !["clinica", "dental", "madrid", "restaurante", "pizzeria", "fiorerie", "milano"].includes(term));
 
     let mapPackPosition: number | null = null
 
-    // 1. CONTROL DE MAPAS & FICHA (Knowledge Graph)
+    // 1. CONTROL DE MAPAS & FICHA (Knowledge Graph - Resultado directo)
     const kgTitle = (kg.title || "").toLowerCase();
-    if (brandTerms.some(term => kgTitle.includes(term))) {
+    if (brandTerms.length > 0 && brandTerms.some(term => kgTitle.includes(term))) {
       mapPackPosition = 1;
     }
 
-    // 2. CONTROL LOCAL PACK
+    // 2. CONTROL LOCAL PACK (Listado de 3 negocios)
     if (!mapPackPosition) {
       localResults.forEach((res: any, i: number) => {
         const title = (res.title || "").toLowerCase();
-        if (brandTerms.some(term => title.includes(term))) {
+        if (brandTerms.length > 0 && brandTerms.some(term => title.includes(term))) {
           mapPackPosition = i + 1;
         }
       });
@@ -67,7 +70,7 @@ export async function runSerpQuery({
     organicResults.forEach((res: any, i: number) => {
       const title = (res.title || "").toLowerCase();
       const snippet = (res.snippet || "").toLowerCase();
-      if ((brandTerms.some(term => title.includes(term)) || brandTerms.some(term => snippet.includes(term))) && organicPosition === null) {
+      if (brandTerms.length > 0 && (brandTerms.some(term => title.includes(term)) || brandTerms.some(term => snippet.includes(term))) && organicPosition === null) {
         organicPosition = i + 1;
       }
     });
@@ -80,12 +83,12 @@ export async function runSerpQuery({
     if (ai) {
       aiText = ai.text || "";
       const aiContent = JSON.stringify(ai).toLowerCase();
-      aiMentioned = brandTerms.some(term => aiContent.includes(term));
+      aiMentioned = brandTerms.length > 0 && brandTerms.some(term => aiContent.includes(term));
     }
 
-    // 5. EXTRACT BUSINESS DATA (Free Mode Support)
+    // 5. EXTRACT BUSINESS DATA (Soporte para modo gratuito)
     let extractedBusinessData = null;
-    if (kg && kg.title && brandTerms.some(term => kg.title.toLowerCase().includes(term))) {
+    if (kg && kg.title && brandTerms.length > 0 && brandTerms.some(term => kg.title.toLowerCase().includes(term))) {
       extractedBusinessData = {
         source: "knowledge_graph",
         title: kg.title,
@@ -101,7 +104,7 @@ export async function runSerpQuery({
       };
     } else {
       const matchingLocal = localResults.find((res: any) =>
-        brandTerms.some(term => (res.title || "").toLowerCase().includes(term))
+        brandTerms.length > 0 && brandTerms.some(term => (res.title || "").toLowerCase().includes(term))
       );
       if (matchingLocal) {
         extractedBusinessData = {
@@ -120,7 +123,7 @@ export async function runSerpQuery({
         competitors: localResults
           .slice(0, 5)
           .map((r: any) => r.title)
-          .filter((t: string) => !brandTerms.some(term => t.toLowerCase().includes(term)))
+          .filter((t: string) => brandTerms.length === 0 || !brandTerms.some(term => t.toLowerCase().includes(term)))
       },
       aiOverview: {
         present: !!ai,
