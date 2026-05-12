@@ -1,4 +1,5 @@
 import type { BusinessInput, QueryResult } from "./types"
+import { BRAND_BLACKLIST } from "./utils"
 
 /**
  * Diccionario de templates de búsqueda por idioma.
@@ -75,14 +76,9 @@ export async function runSerpQuery({
 
     // 2. MATCHING INTELIGENTE DE MARCA
     // Eliminamos términos genéricos que causan falsos positivos (ej: que crea que es "tu" negocio solo por ser una "clinica")
-    const blacklist = [
-      "clinica", "dental", "madrid", "restaurante", "pizzeria", "fiorerie", "milano", 
-      "best", "mejor", "miglior", "services", "servicios", "servizi", "near", "cerca", "vicino"
-    ];
-    
     const brandTerms = business.name.toLowerCase()
       .split(/\s+/)
-      .filter(term => term.length > 2 && !blacklist.includes(term));
+      .filter(term => term.length > 2 && !BRAND_BLACKLIST.includes(term));
 
     let mapPackPosition: number | null = null
 
@@ -160,8 +156,13 @@ export async function runSerpQuery({
         position: mapPackPosition,
         competitors: localResults
           .slice(0, 5)
-          .map((r: any) => r.title)
-          .filter((t: string) => brandTerms.length === 0 || !brandTerms.some(term => t.toLowerCase().includes(term)))
+          .filter((r: any) => brandTerms.length === 0 || !brandTerms.some(term => (r.title || "").toLowerCase().includes(term)))
+          .map((r: any) => ({
+            name: r.title,
+            rating: r.rating,
+            reviews: r.reviews,
+            placeId: r.place_id
+          }))
       },
       aiOverview: {
         present: !!ai,

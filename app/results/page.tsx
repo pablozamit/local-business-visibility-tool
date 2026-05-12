@@ -1,6 +1,7 @@
 import { generateReport } from "@/lib/actions"
 import { ResultsDashboard } from "@/components/results-dashboard"
 import { ReportView } from "@/components/report-view"
+import { ExportPDFButton } from "@/components/export-pdf-button"
 import { AlertCircle, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
@@ -74,7 +75,8 @@ export default async function Page(props: {
                 Analizando: <span className="text-blue-600">{business.name}</span> • {business.location} ({business.countryCode.toUpperCase()})
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+               <ExportPDFButton report={report} />
                <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-black uppercase">v2 Actualizado</div>
             </div>
           </div>
