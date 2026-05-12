@@ -1,4 +1,5 @@
 import type { BusinessInput, QueryResult } from "./types"
+import { logger } from "./logger"
 
 const SEARCH_TEMPLATES: Record<string, any[]> = {
   es: [
@@ -45,9 +46,17 @@ export async function runSerpQuery({
     num: "20"
   })
 
+  const startTime = Date.now()
   try {
     const response = await fetch(`https://serpapi.com/search?${params.toString()}`)
+    const duration = Date.now() - startTime
+
+    if (!response.ok) {
+      throw new Error(`SerpAPI error: ${response.status} ${response.statusText}`)
+    }
+
     const data = await response.json()
+    logger.debug({ query: queryText, duration, status: response.status }, "SerpAPI respuesta recibida")
 
     const localResults = data.local_results || []
     const organicResults = data.organic_results || []
@@ -91,7 +100,8 @@ export async function runSerpQuery({
       organicPosition,
       extractedBusinessData: localResults.find((res: any) => isMyBusiness(res.title)) || (kg.title ? kg : null)
     }
-  } catch (e) {
+  } catch (e: any) {
+    logger.error({ err: e.message, query: queryText }, "Error ejecutando búsqueda SerpAPI")
     return {
       query: queryText,
       queryType,
