@@ -1,13 +1,42 @@
 import type { BusinessInput, QueryResult } from "./types"
 
-export const QUERY_TEMPLATES = [
-  { type: "directa", template: (cat: string, loc: string) => `${cat} ${loc}` },
-  { type: "intent", template: (cat: string, loc: string) => `mejor ${cat} en ${loc}` },
-  { type: "near_me", template: (cat: string, loc: string) => `${cat} cerca de mí` },
-  { type: "service_specific", template: (cat: string, loc: string) => `servicios de ${cat} en ${loc}` },
-  { type: "expert", template: (cat: string, loc: string) => `expertos en ${cat} ${loc}` },
-  { type: "comparison", template: (cat: string, loc: string) => `opiniones sobre ${cat} en ${loc}` },
-]
+/**
+ * Diccionario de templates de búsqueda por idioma.
+ * Esto asegura que la auditoría use términos naturales para el usuario local.
+ */
+const SEARCH_TEMPLATES: Record<string, any[]> = {
+  es: [
+    { type: "directa", template: (cat: string, loc: string) => `${cat} ${loc}` },
+    { type: "intent", template: (cat: string, loc: string) => `mejor ${cat} en ${loc}` },
+    { type: "near_me", template: (cat: string, loc: string) => `${cat} cerca de mí` },
+    { type: "service_specific", template: (cat: string, loc: string) => `servicios de ${cat} en ${loc}` },
+    { type: "expert", template: (cat: string, loc: string) => `expertos en ${cat} ${loc}` },
+    { type: "comparison", template: (cat: string, loc: string) => `opiniones sobre ${cat} en ${loc}` },
+  ],
+  it: [
+    { type: "directa", template: (cat: string, loc: string) => `${cat} ${loc}` },
+    { type: "intent", template: (cat: string, loc: string) => `miglior ${cat} a ${loc}` },
+    { type: "near_me", template: (cat: string, loc: string) => `${cat} vicino a me` },
+    { type: "service_specific", template: (cat: string, loc: string) => `servizi di ${cat} a ${loc}` },
+    { type: "expert", template: (cat: string, loc: string) => `esperti in ${cat} ${loc}` },
+    { type: "comparison", template: (cat: string, loc: string) => `opinioni su ${cat} a ${loc}` },
+  ],
+  en: [
+    { type: "directa", template: (cat: string, loc: string) => `${cat} ${loc}` },
+    { type: "intent", template: (cat: string, loc: string) => `best ${cat} in ${loc}` },
+    { type: "near_me", template: (cat: string, loc: string) => `${cat} near me` },
+    { type: "service_specific", template: (cat: string, loc: string) => `${cat} services in ${loc}` },
+    { type: "expert", template: (cat: string, loc: string) => `${cat} experts ${loc}` },
+    { type: "comparison", template: (cat: string, loc: string) => `reviews about ${cat} in ${loc}` },
+  ]
+}
+
+/**
+ * Retorna los templates correspondientes al idioma del negocio.
+ */
+export function getQueryTemplates(lang: string = "es") {
+  return SEARCH_TEMPLATES[lang] || SEARCH_TEMPLATES["es"];
+}
 
 export async function runSerpQuery({
   business,
@@ -21,16 +50,18 @@ export async function runSerpQuery({
   apiKey: string
 }): Promise<QueryResult> {
 
-  // Mapeo dinámico del dominio de Google según el país
-  const googleDomain = business.countryCode === 'it' ? "google.it" : "google.es";
+  // 1. CONFIGURACIÓN DINÁMICA DE GEOLOCALIZACIÓN
+  const googleDomain = business.countryCode === 'it' ? "google.it" : 
+                       business.countryCode === 'us' ? "google.com" : 
+                       business.countryCode === 'mx' ? "google.com.mx" : "google.es";
 
   const params = new URLSearchParams({
     api_key: apiKey,
     engine: "google",
     q: queryText,
     google_domain: googleDomain,
-    gl: business.countryCode || "es", // País de búsqueda (ej: "it")
-    hl: business.languageCode || "es", // Idioma de la interfaz (ej: "it")
+    gl: business.countryCode || "es", // País real (ej: "it")
+    hl: business.languageCode || "es", // Idioma real (ej: "it")
     num: "20"
   })
 
@@ -42,20 +73,26 @@ export async function runSerpQuery({
     const organicResults = data.organic_results || []
     const kg = data.knowledge_graph || {}
 
-    // Normalización para matching: eliminamos palabras genéricas para evitar falsos positivos
+    // 2. MATCHING INTELIGENTE DE MARCA
+    // Eliminamos términos genéricos que causan falsos positivos (ej: que crea que es "tu" negocio solo por ser una "clinica")
+    const blacklist = [
+      "clinica", "dental", "madrid", "restaurante", "pizzeria", "fiorerie", "milano", 
+      "best", "mejor", "miglior", "services", "servicios", "servizi", "near", "cerca", "vicino"
+    ];
+    
     const brandTerms = business.name.toLowerCase()
       .split(/\s+/)
-      .filter(term => term.length > 2 && !["clinica", "dental", "madrid", "restaurante", "pizzeria", "fiorerie", "milano"].includes(term));
+      .filter(term => term.length > 2 && !blacklist.includes(term));
 
     let mapPackPosition: number | null = null
 
-    // 1. CONTROL DE MAPAS & FICHA (Knowledge Graph - Resultado directo)
+    // A. Control vía Knowledge Graph (Si aparece el panel lateral derecho de Google)
     const kgTitle = (kg.title || "").toLowerCase();
     if (brandTerms.length > 0 && brandTerms.some(term => kgTitle.includes(term))) {
       mapPackPosition = 1;
     }
 
-    // 2. CONTROL LOCAL PACK (Listado de 3 negocios)
+    // B. Control vía Local Pack (El mapa de 3 resultados)
     if (!mapPackPosition) {
       localResults.forEach((res: any, i: number) => {
         const title = (res.title || "").toLowerCase();
@@ -65,7 +102,7 @@ export async function runSerpQuery({
       });
     }
 
-    // 3. CONTROL ORGANICO
+    // C. Control Orgánico
     let organicPosition: number | null = null;
     organicResults.forEach((res: any, i: number) => {
       const title = (res.title || "").toLowerCase();
@@ -75,7 +112,7 @@ export async function runSerpQuery({
       }
     });
 
-    // 4. CONTROL AI (AI Overviews)
+    // 3. ANÁLISIS DE AI OVERVIEWS (SGE)
     const ai = data.ai_overview;
     let aiMentioned = false;
     let aiText = "";
@@ -86,7 +123,8 @@ export async function runSerpQuery({
       aiMentioned = brandTerms.length > 0 && brandTerms.some(term => aiContent.includes(term));
     }
 
-    // 5. EXTRACT BUSINESS DATA (Soporte para modo gratuito)
+    // 4. EXTRACCIÓN DE DATOS PARA "MODO GRATUITO"
+    // Si no hay API Key de Google Places, intentamos sacar la info de lo que ve Google Search
     let extractedBusinessData = null;
     if (kg && kg.title && brandTerms.length > 0 && brandTerms.some(term => kg.title.toLowerCase().includes(term))) {
       extractedBusinessData = {
