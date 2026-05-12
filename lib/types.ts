@@ -14,7 +14,12 @@ export interface QueryResult {
   mapPack: {
     present: boolean
     position: number | null
-    competitors?: string[]
+    competitors?: {
+      name: string
+      rating?: number
+      reviews?: number
+      placeId?: string
+    }[]
   }
   aiOverview: {
     present: boolean
