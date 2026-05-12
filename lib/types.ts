@@ -4,6 +4,8 @@ export interface BusinessInput {
   category: string
   gbpUrl?: string
   placeId?: string
+  countryCode?: string
+  languageCode?: string
 }
 
 export interface QueryResult {
