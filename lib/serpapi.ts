@@ -58,8 +58,8 @@ export async function runSerpQuery({
     const data = await response.json()
     logger.debug({ query: queryText, duration, status: response.status }, "SerpAPI respuesta recibida")
 
-    const localResults = data.local_results || []
-    const organicResults = data.organic_results || []
+    const localResults = Array.isArray(data.local_results) ? data.local_results : []
+    const organicResults = Array.isArray(data.organic_results) ? data.organic_results : []
     const kg = data.knowledge_graph || {}
 
     // Lógica de matching robusta: comprobamos si el nombre está incluido de forma parcial
