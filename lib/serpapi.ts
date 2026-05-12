@@ -1,10 +1,5 @@
 import type { BusinessInput, QueryResult } from "./types"
-import { BRAND_BLACKLIST } from "./utils"
 
-/**
- * Diccionario de templates de búsqueda por idioma.
- * Esto asegura que la auditoría use términos naturales para el usuario local.
- */
 const SEARCH_TEMPLATES: Record<string, any[]> = {
   es: [
     { type: "directa", template: (cat: string, loc: string) => `${cat} ${loc}` },
@@ -21,20 +16,9 @@ const SEARCH_TEMPLATES: Record<string, any[]> = {
     { type: "service_specific", template: (cat: string, loc: string) => `servizi di ${cat} a ${loc}` },
     { type: "expert", template: (cat: string, loc: string) => `esperti in ${cat} ${loc}` },
     { type: "comparison", template: (cat: string, loc: string) => `opinioni su ${cat} a ${loc}` },
-  ],
-  en: [
-    { type: "directa", template: (cat: string, loc: string) => `${cat} ${loc}` },
-    { type: "intent", template: (cat: string, loc: string) => `best ${cat} in ${loc}` },
-    { type: "near_me", template: (cat: string, loc: string) => `${cat} near me` },
-    { type: "service_specific", template: (cat: string, loc: string) => `${cat} services in ${loc}` },
-    { type: "expert", template: (cat: string, loc: string) => `${cat} experts ${loc}` },
-    { type: "comparison", template: (cat: string, loc: string) => `reviews about ${cat} in ${loc}` },
   ]
 }
 
-/**
- * Retorna los templates correspondientes al idioma del negocio.
- */
 export function getQueryTemplates(lang: string = "es") {
   return SEARCH_TEMPLATES[lang] || SEARCH_TEMPLATES["es"];
 }
@@ -51,18 +35,13 @@ export async function runSerpQuery({
   apiKey: string
 }): Promise<QueryResult> {
 
-  // 1. CONFIGURACIÓN DINÁMICA DE GEOLOCALIZACIÓN
-  const googleDomain = business.countryCode === 'it' ? "google.it" : 
-                       business.countryCode === 'us' ? "google.com" : 
-                       business.countryCode === 'mx' ? "google.com.mx" : "google.es";
-
   const params = new URLSearchParams({
     api_key: apiKey,
     engine: "google",
     q: queryText,
-    google_domain: googleDomain,
-    gl: business.countryCode || "es", // País real (ej: "it")
-    hl: business.languageCode || "es", // Idioma real (ej: "it")
+    google_domain: business.countryCode === 'it' ? "google.it" : "google.es",
+    gl: business.countryCode || "es",
+    hl: business.languageCode || "es",
     num: "20"
   })
 
@@ -74,79 +53,27 @@ export async function runSerpQuery({
     const organicResults = data.organic_results || []
     const kg = data.knowledge_graph || {}
 
-    // 2. MATCHING INTELIGENTE DE MARCA
-    // Eliminamos términos genéricos que causan falsos positivos (ej: que crea que es "tu" negocio solo por ser una "clinica")
-    const brandTerms = business.name.toLowerCase()
-      .split(/\s+/)
-      .filter(term => term.length > 2 && !BRAND_BLACKLIST.includes(term));
+    // Lógica de matching robusta: comprobamos si el nombre está incluido de forma parcial
+    const normalizedTarget = business.name.toLowerCase().trim();
+    const isMyBusiness = (title: string) => {
+      if (!title) return false;
+      const t = title.toLowerCase();
+      return t.includes(normalizedTarget) || normalizedTarget.includes(t);
+    };
 
-    let mapPackPosition: number | null = null
-
-    // A. Control vía Knowledge Graph (Si aparece el panel lateral derecho de Google)
-    const kgTitle = (kg.title || "").toLowerCase();
-    if (brandTerms.length > 0 && brandTerms.some(term => kgTitle.includes(term))) {
-      mapPackPosition = 1;
-    }
-
-    // B. Control vía Local Pack (El mapa de 3 resultados)
+    let mapPackPosition: number | null = null;
+    if (kg.title && isMyBusiness(kg.title)) mapPackPosition = 1;
     if (!mapPackPosition) {
-      localResults.forEach((res: any, i: number) => {
-        const title = (res.title || "").toLowerCase();
-        if (brandTerms.length > 0 && brandTerms.some(term => title.includes(term))) {
-          mapPackPosition = i + 1;
-        }
-      });
+      const idx = localResults.findIndex((r: any) => isMyBusiness(r.title));
+      if (idx !== -1) mapPackPosition = idx + 1;
     }
 
-    // C. Control Orgánico
     let organicPosition: number | null = null;
-    organicResults.forEach((res: any, i: number) => {
-      const title = (res.title || "").toLowerCase();
-      const snippet = (res.snippet || "").toLowerCase();
-      if (brandTerms.length > 0 && (brandTerms.some(term => title.includes(term)) || brandTerms.some(term => snippet.includes(term))) && organicPosition === null) {
-        organicPosition = i + 1;
-      }
-    });
+    const orgIdx = organicResults.findIndex((r: any) => isMyBusiness(r.title) || (r.snippet && isMyBusiness(r.snippet)));
+    if (orgIdx !== -1) organicPosition = orgIdx + 1;
 
-    // 3. ANÁLISIS DE AI OVERVIEWS (SGE)
     const ai = data.ai_overview;
-    let aiMentioned = false;
-    let aiText = "";
-
-    if (ai) {
-      aiText = ai.text || "";
-      const aiContent = JSON.stringify(ai).toLowerCase();
-      aiMentioned = brandTerms.length > 0 && brandTerms.some(term => aiContent.includes(term));
-    }
-
-    // 4. EXTRACCIÓN DE DATOS PARA "MODO GRATUITO"
-    // Si no hay API Key de Google Places, intentamos sacar la info de lo que ve Google Search
-    let extractedBusinessData = null;
-    if (kg && kg.title && brandTerms.length > 0 && brandTerms.some(term => kg.title.toLowerCase().includes(term))) {
-      extractedBusinessData = {
-        source: "knowledge_graph",
-        title: kg.title,
-        type: kg.type,
-        rating: kg.rating,
-        reviews: kg.reviews,
-        reviews_results: kg.reviews_results,
-        photos: kg.photos,
-        website: kg.website,
-        phone: kg.phone,
-        address: kg.address,
-        hours: kg.hours,
-      };
-    } else {
-      const matchingLocal = localResults.find((res: any) =>
-        brandTerms.length > 0 && brandTerms.some(term => (res.title || "").toLowerCase().includes(term))
-      );
-      if (matchingLocal) {
-        extractedBusinessData = {
-          source: "local_results",
-          ...matchingLocal
-        };
-      }
-    }
+    const aiMentioned = !!(ai && ai.text && (isMyBusiness(ai.text) || JSON.stringify(ai).toLowerCase().includes(normalizedTarget)));
 
     return {
       query: queryText,
@@ -154,32 +81,22 @@ export async function runSerpQuery({
       mapPack: {
         present: localResults.length > 0 || !!kg.title,
         position: mapPackPosition,
-        competitors: localResults
-          .slice(0, 5)
-          .filter((r: any) => brandTerms.length === 0 || !brandTerms.some(term => (r.title || "").toLowerCase().includes(term)))
-          .map((r: any) => ({
-            name: r.title,
-            rating: r.rating,
-            reviews: r.reviews,
-            placeId: r.place_id
-          }))
+        competitors: localResults.slice(0, 5).map((r: any) => r.title).filter((t: string) => !isMyBusiness(t))
       },
       aiOverview: {
         present: !!ai,
         mentioned: aiMentioned,
-        mentionType: aiMentioned ? "direct" : null,
-        text: aiText
+        text: ai?.text || ""
       },
       organicPosition,
-      extractedBusinessData
+      extractedBusinessData: localResults.find((res: any) => isMyBusiness(res.title)) || (kg.title ? kg : null)
     }
   } catch (e) {
-    console.error("Error en SerpAPI:", e);
     return {
       query: queryText,
       queryType,
       mapPack: { present: false, position: null },
-      aiOverview: { present: false, mentioned: false, mentionType: null },
+      aiOverview: { present: false, mentioned: false },
       organicPosition: null
     }
   }
