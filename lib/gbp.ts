@@ -1,7 +1,5 @@
 import { GBPData, Review, MissingItem, BusinessInput } from "./types";
-
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
-
 import { logger } from "./logger";
 
 export async function fetchGBPData(business: BusinessInput): Promise<GBPData | null> {
@@ -25,7 +23,6 @@ export async function fetchGBPData(business: BusinessInput): Promise<GBPData | n
   }
 
   try {
-    // Usar la New Places API
     const fields = [
       "id",
       "displayName",
@@ -66,12 +63,9 @@ export async function fetchGBPData(business: BusinessInput): Promise<GBPData | n
 }
 
 function extractPlaceIdFromUrl(url: string): string | undefined {
-  // Regex para intentar extraer Place ID o nombre de la URL
-  // Ejemplo: https://www.google.com/maps/place/?q=place_id:ChIJN1t_tDeuEmsRUsoyG83VY1Y
   const placeIdMatch = url.match(/place_id:([a-zA-Z0-9_-]+)/);
   if (placeIdMatch) return placeIdMatch[1];
 
-  // A veces el Place ID está directamente en la URL de Maps tras el !1s
   const mIdMatch = url.match(/!1s(0x[a-fA-F0-9]+:[a-fA-F0-9]+)/);
   if (mIdMatch) return mIdMatch[1];
 
@@ -88,11 +82,17 @@ async function searchPlaceId(name: string, location: string): Promise<string | u
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY!,
-          "X-Goog-FieldMask": "places.id",
+          "X-Goog-FieldMask": "places.id,places.displayName",
         },
         body: JSON.stringify({ textQuery: query }),
       }
     );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error({ status: response.status, error: errorText }, "Error en searchPlaceId");
+      return undefined;
+    }
 
     const data = await response.json();
     return data.places?.[0]?.id;
@@ -113,7 +113,7 @@ function transformPlacesData(data: any): GBPData {
 
   const missingItems: MissingItem[] = [];
   let completedPoints = 0;
-  const totalPoints = 7; // Factores clave
+  const totalPoints = 7;
 
   if (data.photos && data.photos.length >= 30) completedPoints++;
   else missingItems.push({ label: "Fotos insuficientes (menos de 30)", impact: "high" });
@@ -144,7 +144,7 @@ function transformPlacesData(data: any): GBPData {
     rating: data.rating || 0,
     userRatingsTotal: data.userRatingCount || 0,
     photosCount: data.photos?.length || 0,
-    postsCount: 0, // No disponible directamente en Places API v1 de forma sencilla
+    postsCount: 0,
     attributesCompleted: completedPoints,
     attributesTotal: totalPoints,
     lastUpdated: new Date().toISOString(),
